@@ -1,0 +1,5 @@
+{:paths ["src"]
+ :deps
+ {org.clojure/data.codec {:mvn/version "0.1.0"}
+  me.raynes/fs {:mvn/version "1.4.6"}
+  mvxcvi/puget {:mvn/version "1.1.2"}}}

@@ -74,18 +74,20 @@
 (defn record
   "Redefs the vars to record the calls, and returns [val cassette]
    where val is the return value of func."
-  [specs func]
-  (let [recorded-at (java.util.Date.)
-        calls (atom [])
-        record! #(swap! calls conj %)
-        redeffings (->> specs
-                        (map (juxt :var (partial build-wrapped-fn record!)))
-                        (into {}))
-        func-return (binding [*recording?* true]
-                      (with-state :recording
-                        (with-redefs-fn redeffings func)))
-        cassette {:calls @calls :recorded-at recorded-at}]
-    [func-return cassette]))
+  ([specs func]
+   (record specs func {:calls []}))
+  ([specs func {:keys [calls]}]
+   (let [recorded-at (java.util.Date.)
+         calls (atom calls)
+         record! #(swap! calls conj %)
+         redeffings (->> specs
+                         (map (juxt :var (partial build-wrapped-fn record!)))
+                         (into {}))
+         func-return (binding [*recording?* true]
+                       (with-state :recording
+                         (with-redefs-fn redeffings func)))
+         cassette {:calls @calls :recorded-at recorded-at}]
+     [func-return cassette])))
 
 ;; I guess currently we aren't recording actual arguments, just the arg-key.
 ;; Should that change?
@@ -146,15 +148,22 @@
   (when *verbose?* (apply println args)))
 
 (defn with-cassette-fn*
-  [{:keys [name serialization] :as cassette-data} specs func]
+  [{:keys [name serialization accumulate?] :as cassette-data} specs func]
   (validate-specs specs)
   (let [cassette-name (or name cassette-data)]
     (when-not (or (string? cassette-name) (keyword? cassette-name))
       (throw (ex-info "No valid cassette name given" {:invalid cassette-name})))
     (if (cassette-exists? cassette-name)
-      (do
-        (println' "Running test with existing" cassette-name "cassette...")
-        (playback specs (read-cassette cassette-name serialization) func))
+      (if accumulate?
+        (let [cassette (read-cassette cassette-name serialization)]
+          (println' "Recording accumulating" cassette-name "cassette...")
+          (let [[return cassette] (record specs func cassette)]
+            (println' "Serializing...")
+            (write-cassette cassette-name cassette serialization)
+            return))
+        (do
+          (println' "Running with existing" cassette-name "cassette...")
+          (playback specs (read-cassette cassette-name serialization) func)))
       (do
         (println' "Recording new" cassette-name "cassette...")
         (let [[return cassette] (record specs func)]
@@ -210,5 +219,6 @@
                   while recording, which can be useful for doing things
                   like ensuring serializability.
     }"
+  {:style/indent 2}
   [cdata specs & body]
   `(with-cassette-fn* ~cdata ~specs (fn [] ~@body)))

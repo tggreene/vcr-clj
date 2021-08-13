@@ -33,6 +33,32 @@
       (is (thrown? clojure.lang.ExceptionInfo
             (plus 3 4))))))
 
+(deftest with-overwritable-cassette-test
+  (with-spy [plus]
+    (is (empty? (calls plus)))
+    (with-cassette :bang [{:var #'plus}]
+      (is (= 5 (plus 2 3)))
+      (is (= 1 (count (calls plus)))))
+    ;; Check that it replays correctly without calling the original
+    (with-cassette :bang [{:var #'plus}]
+      (is (= 5 (plus 2 3)))
+      (is (= 1 (count (calls plus)))))
+    ;; Check that different calls throw an exception
+    (with-cassette :bang [{:var #'plus}]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (plus 3 4))))
+    ;; Check that we can record new values into an existing cassette
+    (with-cassette {:name :bang
+                    :accumulate? true} [{:var #'plus}]
+      (is (= 7 (plus 3 4)))
+      (is (= 2 (count (calls plus)))))
+
+    ;; Check we can replay previous values without calling the original
+    (with-cassette :bang [{:var #'plus}]
+      (is (= 5 (plus 2 3)))
+      (is (= 7 (plus 3 4)))
+      (is (= 2 (count (calls plus)))))))
+
 (deftest name-validation-test
   (is (thrown? clojure.lang.ExceptionInfo
         (with-cassette {:bame "typo-in-name"} [{:var #'plus}])))
