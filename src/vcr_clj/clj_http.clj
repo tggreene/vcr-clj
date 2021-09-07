@@ -39,9 +39,12 @@
 (def default-spec
   "The spec used by vcr-clj.clj-http/with-cassette, suitable
   for passing to vcr-clj.core/with-cassette."
-  {:var                #'clj-http.core/request
-   :arg-key-fn         default-arg-key-fn
-   :return-transformer serializablize})
+  (if-let [request (and (find-ns 'clj-http.core)
+                        (find-var 'clj-http.core/request))]
+    {:var                request
+     :arg-key-fn         default-arg-key-fn
+     :return-transformer serializablize}
+    {}))
 
 (defmacro with-cassette
   "Helper for running a cassette on clj-http.core/request.
